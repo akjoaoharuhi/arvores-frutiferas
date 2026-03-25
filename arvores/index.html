@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pt-br" data-theme="light">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta name="theme-color" content="#1a3a2a"/>
+  <meta name="description" content="Inventário botânico interativo do campus — BioMap IFES"/>
+  <title>BioMap Campus</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<nav class="navbar" id="navbar">
+  <div class="nav-inner">
+    <a class="nav-logo" onclick="navigate('home')">
+      <div class="logo-mark">🌿</div><span>Bio<em>Map</em></span>
+    </a>
+    <ul class="nav-links" id="navLinks">
+      <li><a onclick="navigate('home')" data-page="home"><i class="fas fa-home"></i><span>Início</span></a></li>
+      <li><a onclick="navigate('map')" data-page="map"><i class="fas fa-map"></i><span>Mapa</span></a></li>
+      <li><a onclick="navigate('catalog')" data-page="catalog"><i class="fas fa-leaf"></i><span>Catálogo</span></a></li>
+      <li><a onclick="navigate('dashboard')" data-page="dashboard"><i class="fas fa-chart-bar"></i><span>Stats</span></a></li>
+      <li><a onclick="navigate('about')" data-page="about"><i class="fas fa-info-circle"></i><span>Sobre</span></a></li>
+    </ul>
+    <div class="nav-actions">
+      <button class="icon-btn" onclick="navigate('favorites')" title="Favoritos">
+        <i class="fas fa-heart"></i><span class="badge" id="favBadge">0</span>
+      </button>
+      <button class="icon-btn" onclick="toggleTheme()" id="themeBtn" title="Tema"><i class="fas fa-moon"></i></button>
+      <button class="hamburger" id="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</nav>
+
+<div id="toast" class="toast"></div>
+<div class="loading-bar" id="loadingBar"></div>
+
+<!-- HOME -->
+<section class="page active" id="page-home">
+  <div class="hero">
+    <div class="hero-bg"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+    <div class="hero-content">
+      <span class="pill">🌱 Projeto Educacional · IFES</span>
+      <h1>Mapeamento de<br><em>Plantas do Campus</em></h1>
+      <p>Explore, descubra e aprenda sobre a biodiversidade vegetal do campus. Um inventário botânico interativo feito por alunos, para alunos.</p>
+      <div class="hero-btns">
+        <button class="btn-primary" onclick="navigate('map')"><i class="fas fa-map-marked-alt"></i> Explorar Mapa</button>
+        <button class="btn-ghost" onclick="navigate('catalog')">Ver Catálogo</button>
+      </div>
+      <div class="stats-row">
+        <div class="stat-item"><span class="sn" id="statTotal">–</span><span>Plantas</span></div>
+        <div class="sdiv"></div>
+        <div class="stat-item"><span class="sn" id="statLocs">–</span><span>Locais</span></div>
+        <div class="sdiv"></div>
+        <div class="stat-item"><span class="sn" id="statTypes">–</span><span>Tipos</span></div>
+      </div>
+    </div>
+    <div class="hero-cards" id="heroCards"></div>
+  </div>
+  <div class="identify-strip">
+    <div class="identify-inner">
+      <div class="identify-icon"><i class="fas fa-camera"></i></div>
+      <div><strong>Identificar planta pela foto</strong><p>Envie uma imagem e nossa IA sugere a espécie</p></div>
+      <button class="btn-primary" onclick="openModal('identifyModal')"><i class="fas fa-magic"></i> Identificar</button>
+    </div>
+  </div>
+  <div class="features-grid">
+    <div class="feat"><i class="fas fa-map-marked-alt"></i><strong>Mapa com Clusters</strong><p>Marcadores agrupados com precisão GPS</p></div>
+    <div class="feat"><i class="fas fa-filter"></i><strong>Filtros Inteligentes</strong><p>Por tipo, local, característica e proximidade</p></div>
+    <div class="feat"><i class="fas fa-chart-pie"></i><strong>Dashboard</strong><p>Estatísticas e gráficos da biodiversidade</p></div>
+    <div class="feat"><i class="fas fa-plus-circle"></i><strong>Adicionar Plantas</strong><p>Clique no mapa para cadastrar novas espécies</p></div>
+  </div>
+</section>
+
+<!-- MAP -->
+<section class="page" id="page-map">
+  <div class="map-wrap">
+    <aside class="map-sidebar" id="mapSidebar">
+      <div class="sidebar-head">
+        <span><i class="fas fa-sliders-h"></i> Filtros</span>
+        <button class="icon-btn sm" onclick="toggleSidebar()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="search-wrap">
+        <i class="fas fa-search"></i>
+        <input id="mapSearch" type="text" placeholder="Buscar planta..." oninput="debounceMapSearch(this.value)"/>
+        <button class="clear-btn" id="clearSearch" onclick="clearMapSearch()" style="display:none"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="filter-section">
+        <label>Tipo</label>
+        <div class="chip-group" id="mapTypeChips">
+          <button class="chip active" data-val="all" onclick="setMapFilter('type','all',this)">Todos</button>
+          <button class="chip" data-val="arvore" onclick="setMapFilter('type','arvore',this)">🌳 Árvore</button>
+          <button class="chip" data-val="palmeira" onclick="setMapFilter('type','palmeira',this)">🌴 Palmeira</button>
+          <button class="chip" data-val="herbacia" onclick="setMapFilter('type','herbacia',this)">🌿 Herbácea</button>
+          <button class="chip" data-val="trepadeira" onclick="setMapFilter('type','trepadeira',this)">🍇 Trepadeira</button>
+          <button class="chip" data-val="cacto" onclick="setMapFilter('type','cacto',this)">🌵 Cacto</button>
+        </div>
+      </div>
+      <div class="filter-section">
+        <label>Características</label>
+        <div class="chip-group" id="mapTagChips">
+          <button class="chip active" data-val="all" onclick="setMapFilter('tag','all',this)">Todas</button>
+          <button class="chip" data-val="frutífera" onclick="setMapFilter('tag','frutífera',this)">🍎 Frutífera</button>
+          <button class="chip" data-val="ornamental" onclick="setMapFilter('tag','ornamental',this)">🌸 Ornamental</button>
+          <button class="chip" data-val="medicinal" onclick="setMapFilter('tag','medicinal',this)">💊 Medicinal</button>
+        </div>
+      </div>
+      <div class="filter-section">
+        <label>Local</label>
+        <div class="chip-group wrap" id="mapLocChips"></div>
+      </div>
+      <div class="filter-section">
+        <label>Proximidade</label>
+        <button class="btn-ghost sm full" id="proximityBtn" onclick="toggleProximity()"><i class="fas fa-location-arrow"></i> Perto de mim</button>
+        <div id="proximityControls" style="display:none;margin-top:8px">
+          <input type="range" id="proximityRange" min="50" max="600" value="200" oninput="updateProximity(this.value)" style="width:100%"/>
+          <span id="proximityLabel" style="font-size:0.75rem;color:var(--text-light)">Raio: 200m</span>
+        </div>
+      </div>
+      <div class="map-list-head">
+        <span id="mapListCount">– plantas</span>
+        <button class="btn-ghost sm" onclick="resetMapFilters()"><i class="fas fa-rotate-left"></i> Limpar</button>
+      </div>
+      <div class="map-list" id="mapList"></div>
+    </aside>
+    <div class="map-main">
+      <div id="map"></div>
+      <div class="map-fabs">
+        <button class="fab" onclick="toggleSidebar()" title="Filtros"><i class="fas fa-sliders-h"></i></button>
+        <button class="fab" onclick="goToMyLocation()" title="Minha localização"><i class="fas fa-location-arrow"></i></button>
+        <button class="fab primary" onclick="enterAddMode()" id="addBtn" title="Adicionar planta"><i class="fas fa-plus"></i></button>
+      </div>
+      <div class="add-mode-bar" id="addModeBar" style="display:none">
+        <i class="fas fa-map-pin"></i>
+        <span>Clique no mapa para posicionar a nova planta</span>
+        <button onclick="exitAddMode()"><i class="fas fa-times"></i> Cancelar</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CATALOG -->
+<section class="page" id="page-catalog">
+  <div class="page-header">
+    <h2><em>Catálogo</em> de Plantas</h2>
+    <p>Todas as espécies mapeadas no campus</p>
+  </div>
+  <div class="catalog-controls">
+    <div class="search-wrap big">
+      <i class="fas fa-search"></i>
+      <input id="catalogSearch" type="text" placeholder="Buscar por nome, espécie ou característica..." oninput="debounceCatalog()"/>
+    </div>
+    <div class="chip-group" id="catTypeChips">
+      <button class="chip active" data-val="all" onclick="setCatFilter('type','all',this)">Todos</button>
+      <button class="chip" data-val="arvore" onclick="setCatFilter('type','arvore',this)">🌳 Árvore</button>
+      <button class="chip" data-val="palmeira" onclick="setCatFilter('type','palmeira',this)">🌴 Palmeira</button>
+      <button class="chip" data-val="herbacia" onclick="setCatFilter('type','herbacia',this)">🌿 Herbácea</button>
+      <button class="chip" data-val="trepadeira" onclick="setCatFilter('type','trepadeira',this)">🍇 Trepadeira</button>
+      <button class="chip" data-val="cacto" onclick="setCatFilter('type','cacto',this)">🌵 Cacto</button>
+    </div>
+    <div class="chip-group" id="catTagChips">
+      <button class="chip active" data-val="all" onclick="setCatFilter('tag','all',this)">Todas</button>
+      <button class="chip" data-val="frutífera" onclick="setCatFilter('tag','frutífera',this)">🍎 Frutífera</button>
+      <button class="chip" data-val="ornamental" onclick="setCatFilter('tag','ornamental',this)">🌸 Ornamental</button>
+      <button class="chip" data-val="medicinal" onclick="setCatFilter('tag','medicinal',this)">💊 Medicinal</button>
+    </div>
+  </div>
+  <div class="result-count" id="catalogCount"></div>
+  <div class="catalog-grid" id="catalogGrid"></div>
+</section>
+
+<!-- DETAILS -->
+<section class="page" id="page-details">
+  <button class="back-btn" onclick="goBack()"><i class="fas fa-arrow-left"></i> Voltar</button>
+  <div id="detailsContent" class="details-wrap"></div>
+</section>
+
+<!-- FAVORITES -->
+<section class="page" id="page-favorites">
+  <div class="page-header">
+    <h2>Meus <em>Favoritos</em></h2><p>Plantas que você salvou</p>
+  </div>
+  <div class="catalog-grid" id="favsGrid"></div>
+  <div class="empty" id="favsEmpty" style="display:none">
+    <i class="fas fa-heart-broken"></i><p>Nenhum favorito ainda.</p>
+    <button class="btn-primary" onclick="navigate('catalog')">Explorar Catálogo</button>
+  </div>
+</section>
+
+<!-- DASHBOARD -->
+<section class="page" id="page-dashboard">
+  <div class="page-header">
+    <h2><em>Dashboard</em> Botânico</h2><p>Estatísticas da biodiversidade do campus</p>
+  </div>
+  <div class="dashboard-grid">
+    <div class="dash-kpi" id="kpi1"></div>
+    <div class="dash-kpi" id="kpi2"></div>
+    <div class="dash-kpi" id="kpi3"></div>
+    <div class="dash-kpi" id="kpi4"></div>
+    <div class="dash-chart-card"><h4>Distribuição por Tipo</h4><canvas id="chartType"></canvas></div>
+    <div class="dash-chart-card"><h4>Plantas por Local</h4><canvas id="chartLoc"></canvas></div>
+    <div class="dash-chart-card"><h4>Por Características</h4><canvas id="chartTags"></canvas></div>
+    <div class="dash-rank-card"><h4>Espécies mais comuns</h4><div id="rankList"></div></div>
+  </div>
+</section>
+
+<!-- ABOUT -->
+<section class="page" id="page-about">
+  <div class="about-layout">
+    <div class="about-text">
+      <span class="pill">🌍 Nosso Propósito</span>
+      <h2>Sobre o <em>Projeto</em></h2>
+      <p>O <strong>BioMap Campus</strong> é um projeto de educação ambiental desenvolvido por estudantes com o objetivo de inventariar, documentar e valorizar a biodiversidade vegetal do campus do IFES.</p>
+      <p>Acreditamos que conhecer as plantas ao nosso redor é o primeiro passo para protegê-las. Este mapeamento serve como ferramenta pedagógica e de conscientização ambiental para toda a comunidade escolar.</p>
+      <div class="goals">
+        <div class="goal"><i class="fas fa-graduation-cap"></i><span>Educação ambiental ativa</span></div>
+        <div class="goal"><i class="fas fa-seedling"></i><span>Preservação da biodiversidade</span></div>
+        <div class="goal"><i class="fas fa-users"></i><span>Engajamento da comunidade</span></div>
+        <div class="goal"><i class="fas fa-database"></i><span>Registro científico participativo</span></div>
+      </div>
+    </div>
+    <div class="about-img"><img src="fotos/banana.jpg" alt="Campus" loading="lazy"/></div>
+  </div>
+</section>
+
+<!-- OVERLAY -->
+<div class="overlay" id="overlay" onclick="closeAllModals()"></div>
+
+<!-- ADD PLANT MODAL -->
+<div class="modal" id="addModal">
+  <div class="modal-head">
+    <h3><i class="fas fa-plus-circle"></i> Nova Planta</h3>
+    <button class="icon-btn" onclick="closeAllModals()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body">
+    <div class="form-row"><label>Nome popular *</label><input id="addNome" type="text" placeholder="Ex: Pé de Manga" class="form-input"/></div>
+    <div class="form-row"><label>Nome científico</label><input id="addSci" type="text" placeholder="Ex: Mangifera indica" class="form-input"/></div>
+    <div class="form-row">
+      <label>Tipo *</label>
+      <select id="addType" class="form-input">
+        <option value="arvore">🌳 Árvore</option><option value="palmeira">🌴 Palmeira</option>
+        <option value="herbacia">🌿 Herbácea</option><option value="trepadeira">🍇 Trepadeira</option>
+        <option value="cacto">🌵 Cacto</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Características</label>
+      <div class="chip-group">
+        <label class="check-chip"><input type="checkbox" value="frutífera" class="add-tag"> 🍎 Frutífera</label>
+        <label class="check-chip"><input type="checkbox" value="ornamental" class="add-tag"> 🌸 Ornamental</label>
+        <label class="check-chip"><input type="checkbox" value="medicinal" class="add-tag"> 💊 Medicinal</label>
+      </div>
+    </div>
+    <div class="form-row"><label>Descrição</label><textarea id="addDesc" class="form-input" rows="3" placeholder="Descreva a planta..."></textarea></div>
+    <div class="form-row"><label>Colheita</label><input id="addColheita" type="text" placeholder="Ex: Jan – Mar" class="form-input"/></div>
+    <div class="form-row">
+      <label>Posição no mapa <span class="form-hint" id="addLatLon">Clique no mapa primeiro</span></label>
+    </div>
+    <div class="form-row">
+      <label>Foto da planta</label>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('imgInput').click()">
+        <i class="fas fa-cloud-upload-alt"></i><span>Clique para selecionar imagem</span>
+        <input type="file" id="imgInput" accept="image/*" style="display:none" onchange="onImageSelected(this)"/>
+      </div>
+      <div id="cropperWrap" style="display:none">
+        <img id="cropperImg" src="" alt="crop" style="max-width:100%"/>
+        <div class="crop-actions">
+          <button class="btn-ghost sm" onclick="resetCrop()"><i class="fas fa-redo"></i> Trocar</button>
+          <button class="btn-primary sm" onclick="confirmCrop()"><i class="fas fa-check"></i> Confirmar corte</button>
+        </div>
+      </div>
+      <div id="imgPreviewWrap" style="display:none">
+        <img id="imgPreview" src="" alt="preview" class="img-preview"/>
+        <button class="btn-ghost sm" onclick="resetCrop()" style="margin-top:8px">Trocar imagem</button>
+      </div>
+    </div>
+    <button class="btn-primary full" onclick="saveNewPlant()"><i class="fas fa-save"></i> Salvar Planta</button>
+  </div>
+</div>
+
+<!-- IDENTIFY MODAL -->
+<div class="modal" id="identifyModal">
+  <div class="modal-head">
+    <h3><i class="fas fa-magic"></i> Identificar Planta</h3>
+    <button class="icon-btn" onclick="closeAllModals()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body">
+    <p style="color:var(--text-mid);margin-bottom:16px">Envie uma foto da planta e nossa IA tentará identificá-la com base no banco de dados do campus.</p>
+    <div class="upload-zone" id="identZone" onclick="document.getElementById('identInput').click()">
+      <i class="fas fa-camera"></i><span>Selecionar foto da planta</span>
+      <input type="file" id="identInput" accept="image/*" style="display:none" onchange="onIdentifyImage(this)"/>
+    </div>
+    <div id="identPreview" style="display:none;margin-top:16px">
+      <img id="identImg" src="" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;margin-bottom:12px"/>
+      <button class="btn-primary full" onclick="runIdentify()"><i class="fas fa-magic"></i> Identificar Espécie</button>
+    </div>
+    <div id="identResult" style="display:none;margin-top:16px"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
